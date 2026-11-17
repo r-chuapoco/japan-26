@@ -2,10 +2,12 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { execFile } = require("child_process");
 
 const root = __dirname;
-const journalPath = path.join(root, "journal.json");
-const stripsPath = path.join(root, "strips.json");
+const journalPath = path.join(root, "data", "journal.json");
+const stripsPath = path.join(root, "data", "strips.json");
+const legacyJournalPath = path.join(root, "journal.json");
 const days = ["nov20", "nov21", "nov22", "nov23", "nov24", "nov25", "nov26", "nov27", "nov28"];
 const authors = ["Ria", "Marie", "Felicia"];
 const types = {
@@ -22,17 +24,28 @@ const types = {
   ".webmanifest": "application/manifest+json",
 };
 
+function ensureData() {
+  fs.mkdirSync(path.join(root, "data"), { recursive: true });
+}
+
 function readJournal() {
   try {
     const data = JSON.parse(fs.readFileSync(journalPath, "utf8"));
     return data && typeof data === "object" && !Array.isArray(data) ? data : {};
   } catch {
-    return {};
+    try {
+      const data = JSON.parse(fs.readFileSync(legacyJournalPath, "utf8"));
+      return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+    } catch {
+      return {};
+    }
   }
 }
 
 function writeJournal(data) {
+  ensureData();
   fs.writeFileSync(journalPath, JSON.stringify(data, null, 2));
+  schedulePublish();
 }
 
 function readBody(req) {
@@ -69,7 +82,9 @@ function readStrips() {
 }
 
 function writeStrips(data) {
+  ensureData();
   fs.writeFileSync(stripsPath, JSON.stringify(data));
+  schedulePublish();
 }
 
 function cleanFrames(frames) {
@@ -90,12 +105,74 @@ function cleanText(value) {
   return String(value || "").trim().slice(0, 2000);
 }
 
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, PUT, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Cache-Control": "no-store",
+};
+
 function sendJson(res, status, data) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
+    ...cors,
   });
   res.end(JSON.stringify(data));
+}
+
+function git(args) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      args,
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "r-chuapoco",
+          GIT_AUTHOR_EMAIL: "357695930+r-chuapoco@users.noreply.github.com",
+          GIT_COMMITTER_NAME: "r-chuapoco",
+          GIT_COMMITTER_EMAIL: "357695930+r-chuapoco@users.noreply.github.com",
+        },
+      },
+      (error, stdout, stderr) => {
+        if (error) reject(new Error(stderr || stdout || error.message));
+        else resolve(stdout);
+      }
+    );
+  });
+}
+
+let publishing = Promise.resolve();
+
+function schedulePublish() {
+  publishing = publishing.then(publishBoard).catch((error) => {
+    console.error("publish", error.message);
+  });
+}
+
+async function publishBoard() {
+  try {
+    await git(["add", "--", "data/journal.json", "data/strips.json"]);
+    await git([
+      "commit",
+      "-m",
+      "Save a note or a photobooth strip from the trip.",
+      "--",
+      "data/journal.json",
+      "data/strips.json",
+    ]);
+  } catch (error) {
+    if (/nothing to commit|no changes added/i.test(String(error.message))) return;
+    throw error;
+  }
+  await git([
+    "-c",
+    "credential.helper=!/tmp/gh_2.104.0_macOS_arm64/bin/gh auth git-credential",
+    "push",
+    "origin",
+    "HEAD",
+  ]);
 }
 
 function serveFile(req, res) {
@@ -128,6 +205,11 @@ function serveFile(req, res) {
 
 const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
+  if (req.method === "OPTIONS" && url.startsWith("/api/")) {
+    res.writeHead(204, cors);
+    res.end();
+    return;
+  }
   if (url === "/api/strips") {
     try {
       if (req.method === "GET") {
@@ -200,8 +282,12 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: "incomplete" });
         return;
       }
-      const entry = { id: crypto.randomUUID(), author, text, created: Date.now() };
-      journal[dayId] = [...(journal[dayId] || []), entry];
+      const id = cleanId(body.id);
+      const created = Number(body.created) || Date.now();
+      journal[dayId] = journal[dayId] || [];
+      if (!journal[dayId].some((item) => item.id === id)) {
+        journal[dayId].push({ id, author, text, created });
+      }
       writeJournal(journal);
       sendJson(res, 200, journal);
       return;

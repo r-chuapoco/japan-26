@@ -6,7 +6,7 @@ const days = [
     name: "Arrival: Kyoto",
     place: "Travel day",
     summary: "Day 1",
-    weather: "☁️ Kyoto forecast · 46–59°F · overcast, small chance of rain",
+    weather: "Forecast loading",
     prompt: "What do you want to remember about the first few hours?",
     photos: [
       ["photos/p4.png", "The Blossom Kyoto at night", "full"],
@@ -81,7 +81,7 @@ const days = [
     name: "Fushimi, Gion, Rings",
     place: "Kyoto",
     summary: "Day 2",
-    weather: "🌤️ Kyoto forecast · 46–55°F · mostly clear",
+    weather: "Forecast loading",
     prompt: "Which little thing from today belongs in our story?",
     photos: [
       ["photos/p6b.png", "Fushimi Inari"],
@@ -141,7 +141,7 @@ const days = [
     name: "Marie’s 30th Birthday",
     place: "Arashiyama",
     summary: "Day 3",
-    weather: "🧥 Kyoto, usual for late November · about 43–57°F · coat weather. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "Marie, what should 40-year-old you know about this birthday?",
     photos: [
       ["photos/p7b.png", "Arashiyama bamboo grove"],
@@ -180,7 +180,7 @@ const days = [
     name: "Osaka Day Trip",
     place: "Dotonbori",
     summary: "Day 4",
-    weather: "🍂 Osaka, usual for late November · about 46–61°F. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "What bite are you going to describe for years?",
     photos: [
       ["photos/p8a.png", "Dotonbori and the Glico sign"],
@@ -217,7 +217,7 @@ const days = [
     name: "Kyoto → Tokyo",
     place: "Travel day",
     summary: "Day 5",
-    weather: "🧥 Kyoto in the morning, Tokyo by afternoon. Usual for late November · about 45–59°F. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "Write the Fuji moment down before it turns into a blur.",
     photos: [
       ["photos/p11b.png", "A train with Mount Fuji behind it"],
@@ -268,7 +268,7 @@ const days = [
     name: "Fashion & Shibuya Views",
     place: "Tokyo",
     summary: "Day 6",
-    weather: "🌅 Tokyo, usual for late November · about 45–59°F · sunset near 4:30. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "What did the city look like, and who were you standing next to?",
     photos: [
       ["photos/p12a.png", "Shibuya Crossing"],
@@ -307,7 +307,7 @@ const days = [
     name: "Ginza Exploration",
     place: "Tokyo",
     summary: "Day 7",
-    weather: "🧥 Tokyo, usual for late November · about 45–59°F. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "What is worth telling your future selves about tonight?",
     photos: [
       ["photos/p13a.png", "A Tokyo market street"],
@@ -360,7 +360,7 @@ const days = [
     name: "Style & Asakusa Night",
     place: "Tokyo",
     summary: "Day 8",
-    weather: "🌆 Tokyo, usual for late November · about 45–59°F · dusk near 4:30. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "What feeling you want to remember most?",
     photos: [
       ["photos/p14b.png", "Senso-ji at dusk"],
@@ -404,7 +404,7 @@ const days = [
     name: "Check Out of Shinjuku",
     place: "Narita",
     summary: "Day 9",
-    weather: "🧥 Tokyo, usual for late November · about 45–59°F. The daily forecast is not out this far yet.",
+    weather: "Forecast loading",
     prompt: "It's the final night! This friendship means the world to me. Cheers to infinite adventures ahead. xo Ria",
     photos: [
       ["photos/p15.jpg", "The torii path"],
@@ -434,6 +434,166 @@ const days = [
 ];
 
 const yenPerDollar = 158;
+
+const forecastPlaces = {
+  nov20: ["kyoto"],
+  nov21: ["kyoto"],
+  nov22: ["kyoto"],
+  nov23: ["osaka"],
+  nov24: ["kyoto", "tokyo"],
+  nov25: ["tokyo"],
+  nov26: ["tokyo"],
+  nov27: ["tokyo"],
+  nov28: ["tokyo"],
+};
+
+const forecastCities = {
+  kyoto: { name: "Kyoto", lat: 34.996, lon: 135.759 },
+  osaka: { name: "Osaka", lat: 34.668, lon: 135.501 },
+  tokyo: { name: "Tokyo", lat: 35.694, lon: 139.704 },
+};
+
+const weatherKey = "japan26-weather";
+const weatherHour = 60 * 60 * 1000;
+let weatherCache = null;
+
+function dayIso(day) {
+  return `2026-11-${day.id.slice(3)}`;
+}
+
+function tokyoParts(iso) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "numeric",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(iso))
+      .map((part) => [part.type, part.value])
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+}
+
+function skyPhrase(code) {
+  const name = String(code || "").split("_")[0];
+  if (name === "clearsky") return ["☀️", "clear"];
+  if (name === "fair") return ["🌤️", "mostly clear"];
+  if (name === "partlycloudy") return ["⛅", "partly cloudy"];
+  if (name === "cloudy") return ["☁️", "overcast"];
+  if (name === "fog") return ["🌫️", "fog"];
+  if (name.includes("thunder")) return ["⛈️", "thunderstorms"];
+  if (name.includes("snow") || name.includes("sleet")) return ["🌨️", "snow"];
+  if (name.includes("rain") || name.includes("drizzle")) return ["🌧️", "rain"];
+  return ["🌤️", "mixed skies"];
+}
+
+function summarizePlace(series, iso) {
+  const points = series
+    .map((point) => ({ point, when: tokyoParts(point.time) }))
+    .filter((item) => item.when.date === iso);
+  if (!points.length) return null;
+  const temps = points
+    .map((item) => item.point.data.instant && item.point.data.instant.details.air_temperature)
+    .filter((value) => typeof value === "number");
+  if (!temps.length) return null;
+  const midday = points.reduce((best, item) =>
+    Math.abs(item.when.hour - 13) < Math.abs(best.when.hour - 13) ? item : best
+  );
+  const block = midday.point.data;
+  const symbol =
+    (block.next_1_hours && block.next_1_hours.summary.symbol_code) ||
+    (block.next_6_hours && block.next_6_hours.summary.symbol_code) ||
+    (block.next_12_hours && block.next_12_hours.summary.symbol_code) ||
+    "";
+  const [mark, phrase] = skyPhrase(symbol);
+  return {
+    mark,
+    phrase,
+    low: Math.round((Math.min(...temps) * 9) / 5 + 32),
+    high: Math.round((Math.max(...temps) * 9) / 5 + 32),
+  };
+}
+
+function forecastLine(day, byCity) {
+  const iso = dayIso(day);
+  const parts = (forecastPlaces[day.id] || [])
+    .map((key) => {
+      const summary = byCity[key] && summarizePlace(byCity[key], iso);
+      return summary ? { name: forecastCities[key].name, ...summary } : null;
+    })
+    .filter(Boolean);
+  if (!parts.length) return "The daily forecast is not out this far yet.";
+  if (parts.length === 1) {
+    const part = parts[0];
+    return `${part.mark} ${part.name} · ${part.low}–${part.high}°F · ${part.phrase}`;
+  }
+  return parts.map((part) => `${part.mark} ${part.name} ${part.low}–${part.high}°F · ${part.phrase}`).join("  ");
+}
+
+function readWeatherCache() {
+  try {
+    return JSON.parse(localStorage.getItem(weatherKey));
+  } catch {
+    return null;
+  }
+}
+
+function paintWeather() {
+  const day = days.find((item) => item.id === state.dayId);
+  const node = document.querySelector(".main .weather");
+  if (day && node) node.textContent = day.weather;
+}
+
+function applyForecast(byCity) {
+  days.forEach((day) => {
+    day.weather = forecastLine(day, byCity);
+  });
+  paintWeather();
+}
+
+async function loadCityForecast(city) {
+  const url = new URL("https://api.met.no/weatherapi/locationforecast/2.0/compact");
+  url.searchParams.set("lat", String(city.lat));
+  url.searchParams.set("lon", String(city.lon));
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("forecast");
+  const data = await response.json();
+  return data.properties.timeseries;
+}
+
+async function refreshWeather(force) {
+  const cached = weatherCache || readWeatherCache();
+  if (!force && cached && cached.byCity && Date.now() - cached.fetchedAt < weatherHour) {
+    weatherCache = cached;
+    applyForecast(cached.byCity);
+    return;
+  }
+  try {
+    const entries = await Promise.all(
+      Object.entries(forecastCities).map(async ([key, city]) => [key, await loadCityForecast(city)])
+    );
+    weatherCache = { fetchedAt: Date.now(), byCity: Object.fromEntries(entries) };
+    try {
+      localStorage.setItem(weatherKey, JSON.stringify(weatherCache));
+    } catch {
+      /* the hourly copy is still in memory */
+    }
+    applyForecast(weatherCache.byCity);
+  } catch {
+    if (cached && cached.byCity) {
+      weatherCache = cached;
+      applyForecast(cached.byCity);
+      return;
+    }
+    days.forEach((day) => {
+      if (day.weather === "Forecast loading") day.weather = "The forecast will refresh when there is a signal.";
+    });
+    paintWeather();
+  }
+}
 
 const guides = {
   "Walk to Akayashiro": {
@@ -895,6 +1055,7 @@ const state = {
   entries: loadEntries(),
   journalNote: "",
   strips: {},
+  saved: {},
   boothNote: "",
   freshStrip: "",
   editingId: "",
@@ -918,19 +1079,86 @@ function rememberEntries() {
   localStorage.setItem(storageKey, JSON.stringify(state.entries));
 }
 
+const pendingKey = "japan26-journal-pending";
+
+function loadPending() {
+  try {
+    const data = JSON.parse(localStorage.getItem(pendingKey)) || {};
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePending(data) {
+  localStorage.setItem(pendingKey, JSON.stringify(data));
+}
+
+function rememberPending(dayId, entry) {
+  const pending = loadPending();
+  pending[dayId] = pending[dayId] || [];
+  pending[dayId] = pending[dayId].filter((item) => item.id !== entry.id);
+  pending[dayId].push(entry);
+  savePending(pending);
+}
+
+function forgetPending(dayId, id) {
+  const pending = loadPending();
+  if (!pending[dayId]) return;
+  pending[dayId] = pending[dayId].filter((item) => item.id !== id);
+  savePending(pending);
+}
+
 function applyEntries(data) {
-  state.entries = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const remote = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const pending = loadPending();
+  Object.entries(pending).forEach(([dayId, list]) => {
+    pending[dayId] = list.filter((entry) => !(remote[dayId] || []).some((item) => item.id === entry.id));
+    remote[dayId] = remote[dayId] || [];
+    pending[dayId].forEach((entry) => {
+      if (!remote[dayId].some((item) => item.id === entry.id)) remote[dayId].push(entry);
+    });
+  });
+  savePending(pending);
+  state.entries = remote;
   rememberEntries();
 }
 
+async function boardOrigin() {
+  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") return document.baseURI;
+  try {
+    const response = await fetch(new URL(`data/live.json?t=${Date.now()}`, document.baseURI), { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.write) return data.write.endsWith("/") ? data.write : `${data.write}/`;
+    }
+  } catch {
+    /* the saved copy on the site still opens */
+  }
+  return document.baseURI;
+}
+
+async function boardUrl(path) {
+  return new URL(path, await boardOrigin());
+}
+
 async function pullEntries() {
-  const response = await fetch(new URL("api/journal", document.baseURI), { cache: "no-store" });
+  try {
+    const response = await fetch(await boardUrl("api/journal"), { cache: "no-store" });
+    if (response.ok) {
+      applyEntries(await response.json());
+      return;
+    }
+  } catch {
+    /* try the saved copy */
+  }
+  const response = await fetch(new URL(`data/journal.json?t=${Date.now()}`, document.baseURI), { cache: "no-store" });
   if (!response.ok) throw new Error("journal");
   applyEntries(await response.json());
 }
 
 async function sendJournal(method, body) {
-  const response = await fetch(new URL("api/journal", document.baseURI), {
+  const response = await fetch(await boardUrl("api/journal"), {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -940,7 +1168,21 @@ async function sendJournal(method, body) {
   state.journalNote = "";
 }
 
+async function retryPending() {
+  const pending = loadPending();
+  for (const [dayId, list] of Object.entries(pending)) {
+    for (const entry of list) {
+      await sendJournal("POST", { ...entry, dayId });
+    }
+  }
+}
+
 async function syncJournal() {
+  try {
+    await retryPending();
+  } catch {
+    /* the saved thread still loads below */
+  }
   try {
     await pullEntries();
   } catch {
@@ -1355,16 +1597,17 @@ function render() {
                   (src, index) => `
                 <li>
                   <img src="${src}" alt="">
-                  <button type="button" class="save" data-save-frame="${strip.id}" data-frame="${index}">Save</button>
+                  <button type="button" class="save" data-save-frame="${strip.id}" data-frame="${index}">Save this photo</button>
                 </li>`
                 )
                 .join("")}
             </ol>
             <figcaption>${escapeHtml(strip.caption)}${strip.created ? ` · ${escapeHtml(stamp(strip.created))}` : ""}</figcaption>
             <div class="strip-actions">
-              <button type="button" class="save" data-save-strip="${strip.id}">Save to phone</button>
+              <button type="button" class="save save-main" data-save-strip="${strip.id}">Save the strip</button>
               <button type="button" data-strip="${strip.id}" data-strip-day="${strip.dayId}">Remove</button>
             </div>
+            ${state.saved[strip.id] ? `<p class="save-note">${escapeHtml(state.saved[strip.id])}</p>` : ""}
           </figure>`;
   const journal = `
       <section class="journal">
@@ -1561,17 +1804,25 @@ function bindHome(app, day) {
   });
 
   app.querySelectorAll("[data-save-frame]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const strip = findStrip(button.dataset.saveFrame);
       const frame = strip && strip.frames[Number(button.dataset.frame)];
-      if (frame) savePhotos([frame], `japan-26-${strip.id}-${Number(button.dataset.frame) + 1}`);
+      if (!frame) return;
+      const note = await saveToDevice(fileFromFrame(frame, `japan-26-${strip.id}-${Number(button.dataset.frame) + 1}`));
+      if (!note) return;
+      state.saved[strip.id] = note;
+      render();
     });
   });
 
   app.querySelectorAll("[data-save-strip]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const strip = findStrip(button.dataset.saveStrip);
-      if (strip) savePhotos(strip.frames, `japan-26-${strip.id}`);
+      if (!strip) return;
+      const note = await saveToDevice(await posterFile(strip));
+      if (!note) return;
+      state.saved[strip.id] = note;
+      render();
     });
   });
 
@@ -1586,12 +1837,23 @@ function bindHome(app, day) {
       event.preventDefault();
       const text = new FormData(event.currentTarget).get("note").toString().trim();
       if (!text) return;
+      const entry = {
+        id: crypto.randomUUID(),
+        dayId: day.id,
+        author: state.author,
+        text,
+        created: Date.now(),
+      };
       state.draft = text;
       try {
-        await sendJournal("POST", { dayId: day.id, author: state.author, text });
+        await sendJournal("POST", entry);
         state.draft = "";
       } catch {
-        state.journalNote = "That note did not join the thread. Keep this computer awake and try again.";
+        rememberPending(day.id, entry);
+        state.entries[day.id] = state.entries[day.id] || [];
+        if (!state.entries[day.id].some((item) => item.id === entry.id)) state.entries[day.id].push(entry);
+        rememberEntries();
+        state.journalNote = "That note is on this phone until it can reach the trip.";
       }
       render();
     });
@@ -1608,11 +1870,21 @@ function bindHome(app, day) {
 
   app.querySelectorAll("[data-remove-entry]").forEach((button) => {
     button.addEventListener("click", async () => {
+      const id = button.dataset.removeEntry;
       try {
-        await sendJournal("DELETE", { dayId: day.id, id: button.dataset.removeEntry });
+        await sendJournal("DELETE", { dayId: day.id, id });
+        forgetPending(day.id, id);
         state.editingId = "";
       } catch {
-        state.journalNote = "That note is still in the thread. Try removing it again.";
+        const pending = loadPending();
+        if ((pending[day.id] || []).some((item) => item.id === id)) {
+          forgetPending(day.id, id);
+          state.entries[day.id] = (state.entries[day.id] || []).filter((item) => item.id !== id);
+          rememberEntries();
+          state.editingId = "";
+        } else {
+          state.journalNote = "That note is still in the thread. Try removing it again.";
+        }
       }
       render();
     });
@@ -1629,7 +1901,18 @@ function bindHome(app, day) {
         await sendJournal("PATCH", { dayId: day.id, id, text });
         state.editingId = "";
       } catch {
-        state.journalNote = "That edit did not reach the thread. Try saving it again.";
+        const pending = loadPending();
+        const entry = (pending[day.id] || []).find((item) => item.id === id);
+        if (entry) {
+          entry.text = text;
+          rememberPending(day.id, entry);
+          const shown = (state.entries[day.id] || []).find((item) => item.id === id);
+          if (shown) shown.text = text;
+          rememberEntries();
+          state.editingId = "";
+        } else {
+          state.journalNote = "That edit did not reach the thread. Try saving it again.";
+        }
       }
       render();
     });
@@ -1698,11 +1981,60 @@ async function replaceLocalStrips(rows) {
   });
 }
 
-async function pullStrips() {
-  const response = await fetch(new URL("api/strips", document.baseURI), { cache: "no-store" });
+const pendingStripKey = "japan26-strip-pending";
+
+function pendingStripIds() {
+  try {
+    const ids = JSON.parse(localStorage.getItem(pendingStripKey));
+    return Array.isArray(ids) ? ids : [];
+  } catch {
+    return [];
+  }
+}
+
+function setPendingStrips(ids) {
+  localStorage.setItem(pendingStripKey, JSON.stringify(ids));
+}
+
+function markStripPending(id) {
+  const ids = pendingStripIds();
+  if (!ids.includes(id)) ids.push(id);
+  setPendingStrips(ids);
+}
+
+function clearStripPending(id) {
+  setPendingStrips(pendingStripIds().filter((item) => item !== id));
+}
+
+async function readStrips() {
+  try {
+    const response = await fetch(await boardUrl("api/strips"), { cache: "no-store" });
+    if (response.ok) return response.json();
+  } catch {
+    /* try the saved copy */
+  }
+  const response = await fetch(new URL(`data/strips.json?t=${Date.now()}`, document.baseURI), { cache: "no-store" });
   if (!response.ok) throw new Error("strips");
-  const rows = await response.json();
-  groupStrips(rows);
+  return response.json();
+}
+
+async function pullStrips() {
+  const rows = await readStrips();
+  let local = [];
+  try {
+    local = await localStrips();
+  } catch {
+    local = [];
+  }
+  const pending = new Set(pendingStripIds());
+  rows.forEach((strip) => {
+    if (pending.has(strip.id)) clearStripPending(strip.id);
+  });
+  const merged = rows.slice();
+  local.forEach((strip) => {
+    if (pendingStripIds().includes(strip.id) && !merged.some((item) => item.id === strip.id)) merged.push(strip);
+  });
+  groupStrips(merged);
   return rows;
 }
 
@@ -1715,25 +2047,27 @@ async function syncStrips() {
   }
   let remote = [];
   try {
-    remote = await pullStrips();
+    remote = await readStrips();
   } catch {
     groupStrips(local);
-    state.boothNote = "These photos are on this phone until the link is open again.";
+    state.boothNote = local.length ? "These photos are on this phone until the link is open again." : "";
     return;
   }
   const leftovers = [];
   for (const strip of local) {
     if (remote.some((item) => item.id === strip.id)) continue;
     try {
-      const response = await fetch(new URL("api/strips", document.baseURI), {
+      const response = await fetch(await boardUrl("api/strips"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(strip),
       });
       if (!response.ok) throw new Error("strips");
       remote = await response.json();
+      clearStripPending(strip.id);
     } catch {
       leftovers.push(strip);
+      markStripPending(strip.id);
     }
   }
   groupStrips([
@@ -1754,18 +2088,20 @@ async function syncStrips() {
 
 async function saveStrip(strip) {
   try {
-    const response = await fetch(new URL("api/strips", document.baseURI), {
+    const response = await fetch(await boardUrl("api/strips"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(strip),
     });
     if (!response.ok) throw new Error("strips");
+    clearStripPending(strip.id);
     groupStrips(await response.json());
     state.boothNote = "";
   } catch {
+    markStripPending(strip.id);
     state.strips[strip.dayId] = state.strips[strip.dayId] || [];
-    state.strips[strip.dayId].unshift(strip);
-    state.boothNote = "That strip is on this phone until this computer is awake again.";
+    if (!state.strips[strip.dayId].some((item) => item.id === strip.id)) state.strips[strip.dayId].unshift(strip);
+    state.boothNote = "That strip is on this phone until it can reach the trip.";
   }
   try {
     await storeStripLocally(strip);
@@ -1777,20 +2113,48 @@ async function saveStrip(strip) {
 
 async function removeStrip(dayId, id) {
   try {
-    const response = await fetch(new URL("api/strips", document.baseURI), {
+    const response = await fetch(await boardUrl("api/strips"), {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dayId, id }),
     });
     if (!response.ok) throw new Error("strips");
+    clearStripPending(id);
     const rows = await response.json();
     groupStrips(rows);
     await replaceLocalStrips(rows);
     state.boothNote = "";
   } catch {
-    state.boothNote = "That strip is still on the site. Try removing it again.";
+    if (pendingStripIds().includes(id)) {
+      clearStripPending(id);
+      state.strips[dayId] = (state.strips[dayId] || []).filter((strip) => strip.id !== id);
+      state.boothNote = "";
+    } else {
+      state.boothNote = "That strip is still on the site. Try removing it again.";
+    }
   }
   render();
+}
+
+async function retryStrips() {
+  const waiting = new Set(pendingStripIds());
+  if (!waiting.size) return;
+  let local = [];
+  try {
+    local = await localStrips();
+  } catch {
+    return;
+  }
+  for (const strip of local) {
+    if (!waiting.has(strip.id)) continue;
+    const response = await fetch(await boardUrl("api/strips"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(strip),
+    });
+    if (!response.ok) throw new Error("strips");
+    clearStripPending(strip.id);
+  }
 }
 
 function fileFromFrame(dataUrl, name) {
@@ -1802,24 +2166,85 @@ function fileFromFrame(dataUrl, name) {
   return new File([bytes], `${name}.jpg`, { type: mime });
 }
 
-async function savePhotos(frames, name) {
-  const files = frames.map((src, index) => fileFromFrame(src, frames.length > 1 ? `${name}-${index + 1}` : name));
-  if (navigator.canShare && navigator.canShare({ files })) {
+function downloadFile(file) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function openSaveSheet(file) {
+  const sheet = document.querySelector("#save-sheet");
+  const image = sheet.querySelector("img");
+  const link = sheet.querySelector("a");
+  if (sheet.objectUrl) URL.revokeObjectURL(sheet.objectUrl);
+  const url = URL.createObjectURL(file);
+  sheet.objectUrl = url;
+  image.src = url;
+  image.alt = "Photobooth photo, ready to save";
+  link.href = url;
+  link.download = file.name;
+  sheet.hidden = false;
+}
+
+async function saveToDevice(file) {
+  const phone = /iPhone|iPad|Android/i.test(navigator.userAgent);
+  if (phone && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files });
+      await navigator.share({ files: [file], title: "Japan ’26" });
+      return "Saved.";
     } catch (error) {
-      if (error && error.name === "AbortError") return;
+      if (error && error.name === "AbortError") return "";
     }
-    return;
+    openSaveSheet(file);
+    return "";
   }
-  files.forEach((file) => {
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadFile(file);
+  return phone ? "Check Downloads, or hold the photo and choose Save Image." : "Saved to your Downloads folder.";
+}
+
+function loadFrame(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("photo"));
+    image.src = src;
   });
+}
+
+async function posterFile(strip) {
+  const images = await Promise.all(strip.frames.map(loadFrame));
+  const width = 640;
+  const pad = 36;
+  const gap = 18;
+  const frameW = width - pad * 2;
+  const frameH = Math.round((frameW * 4) / 3);
+  const footer = 78;
+  const height = pad + images.length * frameH + Math.max(0, images.length - 1) * gap + footer;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#1b1612";
+  context.fillRect(0, 0, width, height);
+  let y = pad;
+  images.forEach((image) => {
+    context.drawImage(image, pad, y, frameW, frameH);
+    y += frameH + gap;
+  });
+  const caption = `${strip.caption || "Japan ’26"}${strip.created ? ` · ${stamp(strip.created)}` : ""}`;
+  context.fillStyle = "#f2ebe1";
+  context.textAlign = "center";
+  context.font = "22px Georgia, serif";
+  if (context.measureText(caption).width > width - 48) context.font = "16px Georgia, serif";
+  context.fillText(caption, width / 2, height - 30);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!blob) return fileFromFrame(strip.frames[0], `japan-26-${strip.id}`);
+  return new File([blob], `japan-26-${strip.id}.jpg`, { type: "image/jpeg" });
 }
 
 function frameFromImage(source) {
@@ -1944,6 +2369,10 @@ async function addFromRoll(files) {
 
 function bindBooth() {
   const booth = document.querySelector("#booth");
+  const sheet = document.querySelector("#save-sheet");
+  sheet.querySelector("[data-save-close]").addEventListener("click", () => {
+    sheet.hidden = true;
+  });
   booth.querySelector("[data-booth-close]").addEventListener("click", closeBooth);
   booth.querySelector("[data-booth-start]").addEventListener("click", () => {
     shootStrip().catch(() => {
@@ -1965,6 +2394,11 @@ syncStrips()
   .then(() => syncJournal())
   .catch(() => {})
   .then(render);
+refreshWeather(false);
+setInterval(() => refreshWeather(true), weatherHour);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshWeather(false);
+});
 
 setInterval(() => {
   if (!state.entered || state.editingId) return;
@@ -1975,8 +2409,18 @@ setInterval(() => {
     .map((strip) => strip.id)
     .sort()
     .join();
-  const jobs = [pullEntries().catch(() => {})];
-  if (state.tab === "booth") jobs.push(pullStrips().catch(() => {}));
+  const jobs = [
+    retryPending()
+      .catch(() => {})
+      .then(() => pullEntries().catch(() => {})),
+  ];
+  if (state.tab === "booth" || pendingStripIds().length) {
+    jobs.push(
+      retryStrips()
+        .catch(() => {})
+        .then(() => pullStrips().catch(() => {}))
+    );
+  }
   Promise.all(jobs).then(() => {
     const notesChanged = JSON.stringify(state.entries) !== beforeNotes;
     const stripsChanged =

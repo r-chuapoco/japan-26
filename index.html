@@ -10,7 +10,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <title>Japan ’26 · Marie’s 30th</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=space" />
+    <link rel="stylesheet" href="styles.css?v=board1" />
   </head>
   <body>
     <div id="app"></div>
@@ -27,7 +27,15 @@
         <button type="button" data-booth-close>Close</button>
       </div>
     </div>
-    <script src="app.js?v=gfact"></script>
+    <div id="save-sheet" class="save-sheet" hidden>
+      <div class="save-card">
+        <img alt="">
+        <p>Hold the photo, then choose Save Image. On a computer, use Download.</p>
+        <a class="save-download">Download</a>
+        <button type="button" data-save-close>Close</button>
+      </div>
+    </div>
+    <script src="app.js?v=board1"></script>
     <script>
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
     </script>

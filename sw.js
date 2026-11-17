@@ -1,9 +1,9 @@
-const CACHE = "japan26-offline-5";
+const CACHE = "japan26-offline-6";
 const BASE = new URL("./", self.registration.scope);
 const FILES = [
   "index.html",
-  "styles.css?v=space",
-  "app.js?v=gfact",
+  "styles.css?v=board1",
+  "app.js?v=board1",
   "manifest.webmanifest",
   "photos/intro-border.png?v=scale",
   "photos/intro-border.png",
@@ -56,7 +56,10 @@ function save(request, response) {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || url.pathname.includes("/api/")) return;
-  const refresh = event.request.mode === "navigate" || /\.(html|css|js|webmanifest)$/.test(url.pathname);
+  const refresh =
+    event.request.mode === "navigate" ||
+    url.pathname.includes("/data/") ||
+    /\.(html|css|js|json|webmanifest)$/.test(url.pathname);
   if (refresh) {
     event.respondWith(
       fetch(event.request)

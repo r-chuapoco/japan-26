@@ -32,7 +32,7 @@ Kyoto nights are at The Blossom Kyoto. Tokyo nights are at Hotel Groove Shinjuku
 - **Photobooth.** Four frames, a strip, and a way to save it to the phone.
 - **Journal.** A prompt for each day, including the one written for 40-year-old Marie.
 
-Add the site to the home screen after the first open. The schedule and photos stay readable later, even with a bad signal. New journal notes and photobooth strips stay on the phone that wrote them. This GitHub page keeps the itinerary. It does not collect new notes.
+Add the site to the home screen after the first open. The schedule and photos stay readable later, even with a bad signal. Journal notes and photobooth strips are kept with the trip, so a new one shows up for everyone after it reaches the site, and it stays there. Saving a strip also puts that picture on a phone or in Downloads.
 
 ## What this repository is
 

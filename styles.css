@@ -1209,29 +1209,91 @@ button {
   text-align: center;
 }
 
-.strip .save,
-.strip button {
-  color: var(--paper);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.strip .save {
+.strip li .save {
   display: block;
-  margin: 6px auto 0;
-  opacity: 0.9;
+  width: fit-content;
+  margin: 8px auto 0;
+  padding: 8px 12px;
+  border: 1px solid var(--paper);
+  border-radius: 999px;
+  color: var(--paper);
+  text-align: center;
+  font-size: 13px;
 }
 
 .strip-actions {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.strip-actions .save-main {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+  font-size: 15px;
 }
 
 .strip-actions button {
-  opacity: 0.75;
+  color: var(--paper);
+  text-align: center;
+  font-size: 14px;
+}
+
+.save-note {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.save-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: end center;
+  padding: 16px;
+  background: rgba(27, 22, 18, 0.45);
+}
+
+.save-sheet[hidden] {
+  display: none;
+}
+
+.save-card {
+  width: min(420px, 100%);
+  margin-bottom: 8px;
+  padding: 16px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.save-card img {
+  width: min(280px, 100%);
+  margin: 0 auto;
+  display: block;
+}
+
+.save-card p {
+  margin: 12px 0 0;
+  line-height: 1.4;
+}
+
+.save-card a,
+.save-card button {
+  display: inline-block;
+  margin: 12px 8px 0 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+  text-decoration: none;
 }
 
 .booth {
