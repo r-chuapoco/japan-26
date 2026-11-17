@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Japan ’26" />
+    <meta name="theme-color" content="#f2ebe1" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <title>Japan ’26 · Marie’s 30th</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css?v=space" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="booth" class="booth" hidden>
+      <div class="booth-stage">
+        <video playsinline autoplay muted></video>
+        <div class="booth-flash"></div>
+        <p class="booth-count"></p>
+      </div>
+      <p class="booth-note">Four frames, a few seconds apart.</p>
+      <div class="booth-actions">
+        <button type="button" data-booth-start>Take four</button>
+        <label class="booth-roll">Camera roll<input type="file" accept="image/*" multiple hidden /></label>
+        <button type="button" data-booth-close>Close</button>
+      </div>
+    </div>
+    <script src="app.js?v=gfact"></script>
+    <script>
+      if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+    </script>
+  </body>
+</html>
